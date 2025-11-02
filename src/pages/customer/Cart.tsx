@@ -46,14 +46,34 @@ const Cart = () => {
   if (cart.length === 0) {
     return (
       <Layout title="Shopping Cart">
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-lg text-gray-500 mb-4">Your cart is empty</p>
-            <Button onClick={() => navigate('/customer/menu')}>
-              Browse Menu
-            </Button>
-          </CardContent>
-        </Card>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+        >
+          <Card className="border-2 border-dashed border-gray-300 dark:border-gray-700">
+            <CardContent className="py-16 text-center">
+              <motion.div
+                animate={{ rotate: [0, 10, -10, 0] }}
+                transition={{ duration: 2, repeat: Infinity }}
+                className="mb-6"
+              >
+                <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900 dark:to-purple-900">
+                  <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                  </svg>
+                </div>
+              </motion.div>
+              <h3 className="text-2xl font-bold mb-2">Your cart is empty</h3>
+              <p className="text-gray-500 mb-6">Add some delicious items from our menu!</p>
+              <Button 
+                onClick={() => navigate('/customer/menu')}
+                className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700"
+              >
+                Browse Menu
+              </Button>
+            </CardContent>
+          </Card>
+        </motion.div>
       </Layout>
     );
   }
@@ -127,10 +147,15 @@ const Cart = () => {
 
         {/* Order Summary */}
         <div className="lg:col-span-1">
-          <Card className="sticky top-20">
-            <CardHeader>
-              <CardTitle>Order Summary</CardTitle>
-            </CardHeader>
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.2 }}
+          >
+            <Card className="sticky top-20 border-2 border-gradient-to-r from-blue-500 to-purple-500">
+              <CardHeader className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-gray-800 dark:to-gray-850">
+                <CardTitle className="text-xl">Order Summary</CardTitle>
+              </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
@@ -177,14 +202,22 @@ const Cart = () => {
               </div>
             </CardContent>
             <CardFooter>
-              <Button
-                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-                onClick={handleCheckout}
+              <motion.div 
+                className="w-full"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
               >
-                Place Order
-              </Button>
+                <Button
+                  className="w-full bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 shadow-lg hover:shadow-xl transition-all"
+                  onClick={handleCheckout}
+                >
+                  <span className="mr-2">🛒</span>
+                  Place Order
+                </Button>
+              </motion.div>
             </CardFooter>
           </Card>
+          </motion.div>
         </div>
       </div>
     </Layout>

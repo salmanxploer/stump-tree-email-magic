@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { motion } from 'framer-motion';
 import { Plus, Search } from 'lucide-react';
 import { foodCategories } from '@/data/mockData';
+import QuickReorder from '@/components/features/QuickReorder';
 
 const Menu = () => {
   const { foodItems, addToCart } = useData();
@@ -29,18 +30,25 @@ const Menu = () => {
   return (
     <Layout title="Menu">
       <div className="space-y-6">
-        {/* Search Bar */}
-        <div className="flex gap-4">
+        {/* Quick Reorder Feature */}
+        <QuickReorder />
+
+        {/* Search Bar with animation */}
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex gap-4"
+        >
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
               placeholder="Search for food..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
+              className="pl-10 border-2 focus:border-blue-500 dark:focus:border-purple-500 transition-colors"
             />
           </div>
-        </div>
+        </motion.div>
 
         {/* Category Tabs */}
         <Tabs value={selectedCategory} onValueChange={setSelectedCategory}>
@@ -61,19 +69,27 @@ const Menu = () => {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.05 }}
+                  whileHover={{ y: -8 }}
                 >
-                  <Card className="overflow-hidden hover:shadow-lg transition-shadow">
+                  <Card className="overflow-hidden hover:shadow-2xl transition-all duration-300 border-2 hover:border-blue-300 dark:hover:border-purple-600">
                     <CardHeader className="p-0">
-                      <div className="relative h-48 overflow-hidden">
+                      <div className="relative h-48 overflow-hidden group">
                         <img
                           src={item.image}
                           alt={item.name}
-                          className="w-full h-full object-cover hover:scale-110 transition-transform duration-300"
+                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                         />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                         {item.stock < 10 && (
-                          <Badge className="absolute top-2 right-2 bg-orange-500">
-                            Low Stock
-                          </Badge>
+                          <motion.div
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            className="absolute top-2 right-2"
+                          >
+                            <Badge className="bg-gradient-to-r from-orange-500 to-red-500 shadow-lg">
+                              Low Stock
+                            </Badge>
+                          </motion.div>
                         )}
                       </div>
                     </CardHeader>
@@ -90,14 +106,20 @@ const Menu = () => {
                       </div>
                     </CardContent>
                     <CardFooter className="p-4 pt-0">
-                      <Button
-                        className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-                        onClick={() => handleAddToCart(item)}
-                        disabled={item.stock === 0}
+                      <motion.div 
+                        className="w-full"
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
                       >
-                        <Plus className="mr-2 h-4 w-4" />
-                        {item.stock === 0 ? 'Out of Stock' : 'Add to Cart'}
-                      </Button>
+                        <Button
+                          className="w-full bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 shadow-md hover:shadow-lg transition-all"
+                          onClick={() => handleAddToCart(item)}
+                          disabled={item.stock === 0}
+                        >
+                          <Plus className="mr-2 h-4 w-4" />
+                          {item.stock === 0 ? 'Out of Stock' : 'Add to Cart'}
+                        </Button>
+                      </motion.div>
                     </CardFooter>
                   </Card>
                 </motion.div>
