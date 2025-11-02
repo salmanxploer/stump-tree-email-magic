@@ -152,7 +152,7 @@ const Cart = () => {
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.2 }}
           >
-            <Card className="sticky top-20 border-2 border-gradient-to-r from-blue-500 to-purple-500">
+            <Card className="sticky top-20 border-2 border-blue-500">
               <CardHeader className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-gray-800 dark:to-gray-850">
                 <CardTitle className="text-xl">Order Summary</CardTitle>
               </CardHeader>

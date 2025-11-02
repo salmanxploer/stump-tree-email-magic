@@ -69,7 +69,10 @@ const QuickReorder = () => {
                         {new Date(order.createdAt).toLocaleDateString()}
                       </p>
                       <p className="text-sm font-medium line-clamp-2">
-                        {order.items.map(item => item.foodName).join(', ')}
+                        {order.items.length > 2 
+                          ? `${order.items.slice(0, 2).map(item => item.foodName).join(', ')}...`
+                          : order.items.map(item => item.foodName).join(', ')
+                        }
                       </p>
                     </div>
                     <div className="flex items-center justify-between">
