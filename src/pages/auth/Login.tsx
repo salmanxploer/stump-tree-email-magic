@@ -369,7 +369,7 @@ const Login = () => {
               </form>
 
               <div className="space-y-4 text-sm">
-                <div className="rounded-xl bg-blue-50/80 p-4 text-left text-gray-700 shadow-sm dark:bg-blue-950/40 dark:text-gray-200">
+                {/* <div className="rounded-xl bg-blue-50/80 p-4 text-left text-gray-700 shadow-sm dark:bg-blue-950/40 dark:text-gray-200">
                   <p className="mb-2 font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
                     Demo access
                   </p>
@@ -379,7 +379,7 @@ const Login = () => {
                     <li>Student: student@bubt.edu</li>
                   </ul>
                   <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Shared password: password123</p>
-                </div>
+                </div> */}
                 <p className="text-center text-gray-600 dark:text-gray-300">
                   Don&apos;t have an account?{' '}
                   <Link
