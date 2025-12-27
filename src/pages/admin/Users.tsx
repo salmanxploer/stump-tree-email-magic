@@ -61,7 +61,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import type { User, UserRole } from '@/types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 interface UserWithStats extends User {
   statistics?: {

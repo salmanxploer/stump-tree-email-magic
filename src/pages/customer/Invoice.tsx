@@ -9,7 +9,7 @@ import { motion } from 'framer-motion';
 import { Download, ArrowLeft, FileText, Printer } from 'lucide-react';
 import { Invoice } from '@/types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 const InvoicePage = () => {
   const { invoiceId } = useParams<{ invoiceId: string }>();
