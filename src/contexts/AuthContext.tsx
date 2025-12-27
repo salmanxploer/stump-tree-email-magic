@@ -89,7 +89,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const syncWithBackend = useCallback(
-    async (firebaseIdToken: string, extra?: { name?: string; phone?: string; role?: UserRole }): Promise<User | null> => {
+    async (firebaseIdToken: string, fbUser: FirebaseUser, extra?: { name?: string; phone?: string; role?: UserRole }): Promise<User | null> => {
       try {
         const response = await fetch(`${API_BASE_URL}/auth/sync`, {
           method: 'POST',
@@ -101,8 +101,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         });
 
         if (!response.ok) {
-          console.warn('Auth sync failed with backend');
-          return null;
+          console.warn('Auth sync failed with backend, using Firebase user data');
+          // Fallback to Firebase user data when backend is unavailable
+          const fallbackUser: User = {
+            id: fbUser.uid,
+            email: fbUser.email || '',
+            name: extra?.name || fbUser.displayName || fbUser.email?.split('@')[0] || 'User',
+            role: extra?.role || 'customer',
+            phone: extra?.phone || fbUser.phoneNumber || undefined,
+            createdAt: fbUser.metadata.creationTime || new Date().toISOString(),
+          };
+          persistUser(fallbackUser);
+          persistToken(firebaseIdToken);
+          return fallbackUser;
         }
 
         const data = await response.json();
@@ -114,8 +125,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
         return backendUser;
       } catch (error) {
-        console.error('Failed to sync auth with backend:', error);
-        return null;
+        console.error('Failed to sync auth with backend, using Firebase user data:', error);
+        // Fallback to Firebase user data when backend is unavailable
+        const fallbackUser: User = {
+          id: fbUser.uid,
+          email: fbUser.email || '',
+          name: extra?.name || fbUser.displayName || fbUser.email?.split('@')[0] || 'User',
+          role: extra?.role || 'customer',
+          phone: extra?.phone || fbUser.phoneNumber || undefined,
+          createdAt: fbUser.metadata.creationTime || new Date().toISOString(),
+        };
+        persistUser(fallbackUser);
+        persistToken(firebaseIdToken);
+        return fallbackUser;
       }
     },
     [persistToken, persistUser]
@@ -160,7 +182,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         try {
           const idToken = await fbUser.getIdToken();
-          await syncWithBackend(idToken);
+          await syncWithBackend(idToken, fbUser);
         } catch (error) {
           console.error('Failed to sync Firebase user with backend:', error);
         }
@@ -203,7 +225,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const fbUser = cred.user;
 
       const idToken = await fbUser.getIdToken();
-      const backendUser = await syncWithBackend(idToken, {
+      const backendUser = await syncWithBackend(idToken, fbUser, {
         name,
         phone,
         role,
@@ -249,7 +271,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const cred = await signInWithEmailAndPassword(auth, email.toLowerCase().trim(), password);
       const fbUser = cred.user;
       const idToken = await fbUser.getIdToken();
-      const backendUser = await syncWithBackend(idToken);
+      const backendUser = await syncWithBackend(idToken, fbUser);
 
       if (!backendUser) {
         return {
@@ -294,7 +316,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const fbUser = cred.user;
 
       const idToken = await fbUser.getIdToken();
-      await syncWithBackend(idToken);
+      await syncWithBackend(idToken, fbUser);
 
       return { success: true, message: 'Login successful!' };
     } catch (error: any) {
