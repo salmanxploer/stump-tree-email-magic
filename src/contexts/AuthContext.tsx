@@ -12,7 +12,7 @@ import {
   type User as FirebaseUser,
 } from 'firebase/auth';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 interface AuthContextType {
   user: User | null;
