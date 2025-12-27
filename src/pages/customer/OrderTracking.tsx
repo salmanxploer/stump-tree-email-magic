@@ -10,7 +10,7 @@ import { motion } from 'framer-motion';
 import { Check, Clock, ChefHat, Package, CheckCircle, FileText } from 'lucide-react';
 import { Invoice } from '@/types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 const OrderTracking = () => {
   const { orderId } = useParams<{ orderId: string }>();

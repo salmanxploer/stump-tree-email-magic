@@ -4,7 +4,8 @@ import { defaultFoodItems } from '@/data/mockData';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+const HAS_BACKEND = Boolean(API_BASE_URL && API_BASE_URL !== 'http://localhost:4000');
 const FOOD_CACHE_KEY = 'bubt-menu-cache';
 const ORDER_CACHE_KEY = 'bubt-orders-cache';
 const CART_STORAGE_KEY = 'bubt-cart';
@@ -92,6 +93,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         requireAuth?: boolean;
       } = {}
     ): Promise<T> => {
+      // If no backend is configured, throw error to trigger fallback to mock data
+      if (!HAS_BACKEND) {
+        throw new Error('Backend not configured - using local data');
+      }
+
       const { method = 'GET', body, requireAuth = false } = options;
       const headers: Record<string, string> = {};
 
@@ -136,7 +142,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           localStorage.setItem(FOOD_CACHE_KEY, JSON.stringify(data.items));
         }
       } catch (error) {
-        console.error('Failed to load menu items', error);
+        // Backend not available - use default/cached data
+        console.info('Using local menu data - backend unavailable', error);
       }
     };
 
