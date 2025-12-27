@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: bubt-cafe-api
+    runtime: node
+    region: singapore
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: CLIENT_URLS
+        value: https://bubt-cafe.netlify.app
+      - key: GOOGLE_CALLBACK_URL
+        sync: false
+      - key: ADMIN_EMAILS
+        value: admin@bubt.edu

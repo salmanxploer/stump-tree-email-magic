@@ -65,6 +65,11 @@ app.use(
 app.use(express.json());
 app.use(passport.initialize());
 
+// Health check endpoint for Render
+app.get('/health', (_req: Request, res: Response) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 passport.use(
   new GoogleStrategy(
     {
