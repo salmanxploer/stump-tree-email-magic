@@ -90,7 +90,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const syncWithBackend = useCallback(
     async (firebaseIdToken: string, fbUser: FirebaseUser, extra?: { name?: string; phone?: string; role?: UserRole }): Promise<User | null> => {
+      // Create fallback user from Firebase data
+      const createFallbackUser = (): User => {
+        return {
+          id: fbUser.uid,
+          email: fbUser.email || '',
+          name: extra?.name || fbUser.displayName || fbUser.email?.split('@')[0] || 'User',
+          role: extra?.role || 'customer',
+          phone: extra?.phone || fbUser.phoneNumber || undefined,
+          createdAt: fbUser.metadata.creationTime || new Date().toISOString(),
+        };
+      };
+
+      // If no backend URL configured, use Firebase-only mode
+      if (!API_BASE_URL || API_BASE_URL === 'http://localhost:4000') {
+        console.info('[Auth] Backend not configured or is localhost, using Firebase-only mode');
+        const fallbackUser = createFallbackUser();
+        persistUser(fallbackUser);
+        persistToken(firebaseIdToken);
+        return fallbackUser;
+      }
+
       try {
+        // Set a 5-second timeout for backend requests
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+
         const response = await fetch(`${API_BASE_URL}/auth/sync`, {
           method: 'POST',
           headers: {
@@ -98,19 +123,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             'Content-Type': 'application/json',
           },
           body: JSON.stringify(extra ?? {}),
+          signal: controller.signal,
         });
 
+        clearTimeout(timeoutId);
+
         if (!response.ok) {
-          console.warn('Auth sync failed with backend, using Firebase user data');
-          // Fallback to Firebase user data when backend is unavailable
-          const fallbackUser: User = {
-            id: fbUser.uid,
-            email: fbUser.email || '',
-            name: extra?.name || fbUser.displayName || fbUser.email?.split('@')[0] || 'User',
-            role: extra?.role || 'customer',
-            phone: extra?.phone || fbUser.phoneNumber || undefined,
-            createdAt: fbUser.metadata.creationTime || new Date().toISOString(),
-          };
+          console.warn(`Auth sync failed with backend (${response.status}), using Firebase user data`);
+          const fallbackUser = createFallbackUser();
           persistUser(fallbackUser);
           persistToken(firebaseIdToken);
           return fallbackUser;
@@ -123,18 +143,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (sessionToken) {
           persistToken(sessionToken);
         }
+        console.info('[Auth] Successfully synced with backend');
         return backendUser;
       } catch (error) {
-        console.error('Failed to sync auth with backend, using Firebase user data:', error);
-        // Fallback to Firebase user data when backend is unavailable
-        const fallbackUser: User = {
-          id: fbUser.uid,
-          email: fbUser.email || '',
-          name: extra?.name || fbUser.displayName || fbUser.email?.split('@')[0] || 'User',
-          role: extra?.role || 'customer',
-          phone: extra?.phone || fbUser.phoneNumber || undefined,
-          createdAt: fbUser.metadata.creationTime || new Date().toISOString(),
-        };
+        console.warn('Failed to sync auth with backend, using Firebase user data:', error);
+        // Fallback to Firebase user data when backend is unavailable or timeout
+        const fallbackUser = createFallbackUser();
         persistUser(fallbackUser);
         persistToken(firebaseIdToken);
         return fallbackUser;
