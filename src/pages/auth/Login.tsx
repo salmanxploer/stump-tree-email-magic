@@ -378,7 +378,7 @@ const Login = () => {
                     <li>Staff: staff@bubt.edu</li> */}
                     <li>Student: 20235203026@cse.bubt.edu.bd</li>
                   </ul>
-                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Shared password: 20235203026</p>
+                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Password: 20235203026</p>
                 </div>
                 <p className="text-center text-gray-600 dark:text-gray-300">
                   Don&apos;t have an account?{' '}
