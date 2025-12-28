@@ -376,7 +376,7 @@ const Login = () => {
                   <ul className="space-y-1 text-sm">
                     {/* <li>Admin: admin@bubt.edu</li>
                     <li>Staff: staff@bubt.edu</li> */}
-                    <li>Student: 20235203026@cse.bubt.edu.bd</li>
+                    <li>Email: 20235203026@cse.bubt.edu.bd</li>
                   </ul>
                   <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Password: 20235203026</p>
                 </div>
