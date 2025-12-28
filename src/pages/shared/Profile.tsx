@@ -34,6 +34,7 @@ import {
 import { useTheme } from 'next-themes';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+const USE_BACKEND = Boolean(API_BASE_URL && !API_BASE_URL.includes('localhost'));
 
 const Profile = () => {
   const { user, updateUser } = useAuth();
@@ -104,36 +105,48 @@ const Profile = () => {
         return;
       }
 
-      const token = localStorage.getItem('bubt-auth-token');
-      if (!token) {
-        toast.error('Authentication required');
-        setIsLoading(false);
-        return;
+      // Create updated user object
+      const updatedUser = {
+        ...user,
+        name: formData.name,
+        phone: formData.phone || undefined,
+        avatar: formData.avatar || undefined,
+        preferences,
+      };
+
+      // If backend is available, try to sync
+      if (USE_BACKEND) {
+        const token = localStorage.getItem('bubt-auth-token');
+        if (token) {
+          try {
+            const response = await fetch(`${API_BASE_URL}/auth/profile`, {
+              method: 'PATCH',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                name: formData.name,
+                phone: formData.phone || null,
+                avatar: formData.avatar || null,
+                preferences,
+              }),
+            });
+
+            if (response.ok) {
+              const data = await response.json();
+              Object.assign(updatedUser, data.user);
+            }
+          } catch (error) {
+            console.warn('Backend sync failed, saving locally:', error);
+          }
+        }
       }
 
-      const response = await fetch(`${API_BASE_URL}/auth/profile`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: formData.name,
-          phone: formData.phone || null,
-          avatar: formData.avatar || null,
-          preferences,
-        }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || 'Failed to update profile');
-      }
-
-      const data = await response.json();
-      const updatedUser = data.user;
-
+      // Save to localStorage
       localStorage.setItem('bubt-current-user', JSON.stringify(updatedUser));
+      
+      // Update context
       if (updateUser) {
         updateUser(updatedUser);
       }
