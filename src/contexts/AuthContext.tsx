@@ -96,7 +96,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           id: fbUser.uid,
           email: fbUser.email || '',
           name: extra?.name || fbUser.displayName || fbUser.email?.split('@')[0] || 'User',
-          role: extra?.role || 'customer',
+          role: extra?.role || 'student',
           phone: extra?.phone || fbUser.phoneNumber || undefined,
           createdAt: fbUser.metadata.creationTime || new Date().toISOString(),
         };
@@ -285,13 +285,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const cred = await signInWithEmailAndPassword(auth, email.toLowerCase().trim(), password);
       const fbUser = cred.user;
       const idToken = await fbUser.getIdToken();
-      const backendUser = await syncWithBackend(idToken, fbUser);
+      
+      // Try to sync with backend, but create fallback if it fails
+      let backendUser: User | null = null;
+      try {
+        backendUser = await syncWithBackend(idToken, fbUser);
+      } catch (syncError) {
+        console.warn('Backend sync failed, creating fallback user:', syncError);
+      }
 
+      // If syncWithBackend returned null or threw, create a fallback user directly
       if (!backendUser) {
-        return {
-          success: false,
-          message: 'Unable to load your profile after login. Please try again or contact support.',
+        backendUser = {
+          id: fbUser.uid,
+          email: fbUser.email || '',
+          name: fbUser.displayName || fbUser.email?.split('@')[0] || 'User',
+          role: 'student',
+          createdAt: fbUser.metadata.creationTime || new Date().toISOString(),
         };
+        persistUser(backendUser);
+        persistToken(idToken);
       }
 
       return {
@@ -330,7 +343,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const fbUser = cred.user;
 
       const idToken = await fbUser.getIdToken();
-      await syncWithBackend(idToken, fbUser);
+      
+      // Try to sync with backend, but create fallback if it fails
+      let backendUser: User | null = null;
+      try {
+        backendUser = await syncWithBackend(idToken, fbUser);
+      } catch (syncError) {
+        console.warn('Backend sync failed for Google login, creating fallback user:', syncError);
+      }
+
+      // If syncWithBackend returned null or threw, create a fallback user directly
+      if (!backendUser) {
+        backendUser = {
+          id: fbUser.uid,
+          email: fbUser.email || '',
+          name: fbUser.displayName || fbUser.email?.split('@')[0] || 'User',
+          role: 'student',
+          createdAt: fbUser.metadata.creationTime || new Date().toISOString(),
+        };
+        persistUser(backendUser);
+        persistToken(idToken);
+      }
 
       return { success: true, message: 'Login successful!' };
     } catch (error: any) {
