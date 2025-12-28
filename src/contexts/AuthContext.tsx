@@ -43,10 +43,22 @@ interface AuthContextType {
 const TOKEN_STORAGE_KEY = 'bubt-auth-token';
 const USER_STORAGE_KEY = 'bubt-current-user';
 
+// Admin emails - users with these emails automatically get admin role
+const ADMIN_EMAILS = [
+  'admin@bubt.edu',
+  'salman@bubt.edu',
+  // Add your email here to become admin
+].map(e => e.toLowerCase());
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Helper: Create user object from Firebase user
 const createUserFromFirebase = (fbUser: FirebaseUser, extras?: { name?: string; phone?: string; role?: UserRole }): User => {
+  const email = (fbUser.email || '').toLowerCase();
+  
+  // Check if this email should be admin
+  const isAdminEmail = ADMIN_EMAILS.includes(email);
+  
   // Check if user was previously stored with a role
   let storedRole: UserRole = 'student';
   try {
@@ -61,11 +73,14 @@ const createUserFromFirebase = (fbUser: FirebaseUser, extras?: { name?: string; 
     // Ignore
   }
 
+  // Priority: admin email > extras.role > storedRole > 'student'
+  const finalRole: UserRole = isAdminEmail ? 'admin' : (extras?.role || storedRole);
+
   return {
     id: fbUser.uid,
     email: fbUser.email || '',
     name: extras?.name || fbUser.displayName || fbUser.email?.split('@')[0] || 'User',
-    role: extras?.role || storedRole,
+    role: finalRole,
     phone: extras?.phone || fbUser.phoneNumber || undefined,
     avatar: fbUser.photoURL || undefined,
     createdAt: fbUser.metadata.creationTime || new Date().toISOString(),
