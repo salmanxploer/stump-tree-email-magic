@@ -12,7 +12,9 @@ import {
   type User as FirebaseUser,
 } from 'firebase/auth';
 
+// FIREBASE-ONLY MODE: No backend sync - works without any server
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+const USE_BACKEND = Boolean(API_BASE_URL && !API_BASE_URL.includes('localhost'));
 
 interface AuthContextType {
   user: User | null;
@@ -42,6 +44,33 @@ const TOKEN_STORAGE_KEY = 'bubt-auth-token';
 const USER_STORAGE_KEY = 'bubt-current-user';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// Helper: Create user object from Firebase user
+const createUserFromFirebase = (fbUser: FirebaseUser, extras?: { name?: string; phone?: string; role?: UserRole }): User => {
+  // Check if user was previously stored with a role
+  let storedRole: UserRole = 'student';
+  try {
+    const stored = localStorage.getItem(USER_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (parsed.id === fbUser.uid && parsed.role) {
+        storedRole = parsed.role;
+      }
+    }
+  } catch {
+    // Ignore
+  }
+
+  return {
+    id: fbUser.uid,
+    email: fbUser.email || '',
+    name: extras?.name || fbUser.displayName || fbUser.email?.split('@')[0] || 'User',
+    role: extras?.role || storedRole,
+    phone: extras?.phone || fbUser.phoneNumber || undefined,
+    avatar: fbUser.photoURL || undefined,
+    createdAt: fbUser.metadata.creationTime || new Date().toISOString(),
+  };
+};
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -77,6 +106,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, []);
 
+  // Restore token on mount
   useEffect(() => {
     try {
       const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
@@ -88,33 +118,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, []);
 
+  // Optional backend sync - only if backend URL is configured and not localhost
   const syncWithBackend = useCallback(
-    async (firebaseIdToken: string, fbUser: FirebaseUser, extra?: { name?: string; phone?: string; role?: UserRole }): Promise<User | null> => {
-      // Create fallback user from Firebase data
-      const createFallbackUser = (): User => {
-        return {
-          id: fbUser.uid,
-          email: fbUser.email || '',
-          name: extra?.name || fbUser.displayName || fbUser.email?.split('@')[0] || 'User',
-          role: extra?.role || 'student',
-          phone: extra?.phone || fbUser.phoneNumber || undefined,
-          createdAt: fbUser.metadata.creationTime || new Date().toISOString(),
-        };
-      };
+    async (firebaseIdToken: string, fbUser: FirebaseUser, extras?: { name?: string; phone?: string; role?: UserRole }): Promise<User> => {
+      const localUser = createUserFromFirebase(fbUser, extras);
 
-      // If no backend URL configured, use Firebase-only mode
-      if (!API_BASE_URL || API_BASE_URL === 'http://localhost:4000') {
-        console.info('[Auth] Backend not configured or is localhost, using Firebase-only mode');
-        const fallbackUser = createFallbackUser();
-        persistUser(fallbackUser);
+      // Skip backend sync if not configured
+      if (!USE_BACKEND) {
+        console.info('[Auth] Running in Firebase-only mode (no backend)');
+        persistUser(localUser);
         persistToken(firebaseIdToken);
-        return fallbackUser;
+        return localUser;
       }
 
+      // Try backend sync with short timeout
       try {
-        // Set a 5-second timeout for backend requests
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
 
         const response = await fetch(`${API_BASE_URL}/auth/sync`, {
           method: 'POST',
@@ -122,48 +142,38 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             'Authorization': `Bearer ${firebaseIdToken}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(extra ?? {}),
+          body: JSON.stringify(extras ?? {}),
           signal: controller.signal,
         });
 
         clearTimeout(timeoutId);
 
-        if (!response.ok) {
-          console.warn(`Auth sync failed with backend (${response.status}), using Firebase user data`);
-          const fallbackUser = createFallbackUser();
-          persistUser(fallbackUser);
-          persistToken(firebaseIdToken);
-          return fallbackUser;
+        if (response.ok) {
+          const data = await response.json();
+          const backendUser = data.user as User;
+          persistUser(backendUser);
+          if (data.token) {
+            persistToken(data.token);
+          }
+          console.info('[Auth] Synced with backend');
+          return backendUser;
         }
-
-        const data = await response.json();
-        const backendUser = data.user as User;
-        const sessionToken = typeof data.token === 'string' ? data.token : null;
-        persistUser(backendUser);
-        if (sessionToken) {
-          persistToken(sessionToken);
-        }
-        console.info('[Auth] Successfully synced with backend');
-        return backendUser;
       } catch (error) {
-        console.warn('Failed to sync auth with backend, using Firebase user data:', error);
-        // Fallback to Firebase user data when backend is unavailable or timeout
-        const fallbackUser = createFallbackUser();
-        persistUser(fallbackUser);
-        persistToken(firebaseIdToken);
-        return fallbackUser;
+        console.warn('[Auth] Backend sync failed, using local user:', error);
       }
+
+      // Fallback to local user
+      persistUser(localUser);
+      persistToken(firebaseIdToken);
+      return localUser;
     },
     [persistToken, persistUser]
   );
 
-  // Initialize Firebase auth state on mount
+  // Initialize Firebase auth state
   useEffect(() => {
     if (!isFirebaseConfigured) {
-      // Firebase is not configured – skip auth binding but allow app to render
-      console.warn(
-        '[Auth] Firebase is not configured. Set VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_PROJECT_ID, VITE_FIREBASE_APP_ID to enable Firebase auth.'
-      );
+      console.warn('[Auth] Firebase not configured');
       setAuthReady(true);
       return;
     }
@@ -183,34 +193,41 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           return;
         }
 
-        // Try to restore cached user quickly
+        // Restore from localStorage first for instant UI
         try {
-          const storedUser = localStorage.getItem(USER_STORAGE_KEY);
-          if (storedUser) {
-            const parsed = JSON.parse(storedUser) as User;
-            setUser(parsed);
+          const stored = localStorage.getItem(USER_STORAGE_KEY);
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (parsed.id === fbUser.uid) {
+              setUser(parsed);
+            }
           }
         } catch {
-          // Ignore parse errors
+          // Ignore
         }
 
+        // Then sync (local or backend)
         try {
           const idToken = await fbUser.getIdToken();
           await syncWithBackend(idToken, fbUser);
         } catch (error) {
-          console.error('Failed to sync Firebase user with backend:', error);
+          console.error('[Auth] Sync error:', error);
+          // Still create a local user on error
+          const localUser = createUserFromFirebase(fbUser);
+          persistUser(localUser);
         }
 
         setAuthReady(true);
       });
     } catch (error) {
-      console.error('Failed to initialize Firebase auth:', error);
+      console.error('[Auth] Init error:', error);
       setAuthReady(true);
     }
 
     return () => unsubscribe();
   }, [persistToken, persistUser, syncWithBackend]);
 
+  // REGISTER
   const register = async (
     name: string,
     email: string,
@@ -220,10 +237,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   ): Promise<{ success: boolean; message: string }> => {
     try {
       if (!isFirebaseConfigured) {
-        return {
-          success: false,
-          message: 'Authentication is not configured. Please contact the administrator.',
-        };
+        return { success: false, message: 'Authentication not configured.' };
       }
 
       if (!email || !password || !name) {
@@ -231,180 +245,111 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       if (password.length < 6) {
-        return { success: false, message: 'Password must be at least 6 characters long.' };
+        return { success: false, message: 'Password must be at least 6 characters.' };
       }
 
       const auth = getFirebaseAuth();
       const cred = await createUserWithEmailAndPassword(auth, email.toLowerCase().trim(), password);
       const fbUser = cred.user;
-
       const idToken = await fbUser.getIdToken();
-      const backendUser = await syncWithBackend(idToken, fbUser, {
-        name,
-        phone,
-        role,
-      });
 
-      if (!backendUser) {
-        return {
-          success: false,
-          message: 'Account created, but we could not sync your profile. Please try again.',
-        };
-      }
+      // Create and save user
+      await syncWithBackend(idToken, fbUser, { name, phone, role });
 
       return { success: true, message: 'Account created successfully!' };
     } catch (error: any) {
-      console.error('Registration error:', error);
-
+      console.error('Register error:', error);
       const message =
         error?.code === 'auth/email-already-in-use'
           ? 'An account with this email already exists.'
-          : error?.message || 'Something went wrong while creating your account.';
-
+          : error?.message || 'Registration failed.';
       return { success: false, message };
     }
   };
 
+  // LOGIN
   const login = async (
     email: string,
     password: string
   ): Promise<{ success: boolean; message: string; role?: UserRole; user?: User }> => {
     try {
       if (!email || !password) {
-        return { success: false, message: 'Please enter both email and password.' };
+        return { success: false, message: 'Please enter email and password.' };
       }
 
       if (!isFirebaseConfigured) {
-        return {
-          success: false,
-          message: 'Authentication is not configured. Please contact the administrator.',
-        };
+        return { success: false, message: 'Authentication not configured.' };
       }
 
       const auth = getFirebaseAuth();
       const cred = await signInWithEmailAndPassword(auth, email.toLowerCase().trim(), password);
       const fbUser = cred.user;
       const idToken = await fbUser.getIdToken();
-      
-      // Try to sync with backend, but create fallback if it fails
-      let backendUser: User | null = null;
-      try {
-        backendUser = await syncWithBackend(idToken, fbUser);
-      } catch (syncError) {
-        console.warn('Backend sync failed, creating fallback user:', syncError);
-      }
 
-      // If syncWithBackend returned null or threw, create a fallback user directly
-      if (!backendUser) {
-        backendUser = {
-          id: fbUser.uid,
-          email: fbUser.email || '',
-          name: fbUser.displayName || fbUser.email?.split('@')[0] || 'User',
-          role: 'student',
-          createdAt: fbUser.metadata.creationTime || new Date().toISOString(),
-        };
-        persistUser(backendUser);
-        persistToken(idToken);
-      }
+      // Create user (syncs with backend if available, otherwise local)
+      const appUser = await syncWithBackend(idToken, fbUser);
 
       return {
         success: true,
         message: 'Welcome back!',
-        role: backendUser.role,
-        user: backendUser,
+        role: appUser.role,
+        user: appUser,
       };
     } catch (error: any) {
       console.error('Login error:', error);
-      
       const message =
         error?.code === 'auth/invalid-credential' || error?.code === 'auth/wrong-password'
           ? 'Invalid email or password.'
-          : error?.message || 'Network error. Please check your connection and try again.';
-
-      return {
-        success: false,
-        message,
-      };
+          : error?.code === 'auth/user-not-found'
+          ? 'No account found with this email.'
+          : error?.message || 'Login failed.';
+      return { success: false, message };
     }
   };
 
+  // GOOGLE LOGIN
   const loginWithGoogle = async (): Promise<{ success: boolean; message: string }> => {
     try {
       if (!isFirebaseConfigured) {
-        return {
-          success: false,
-          message: 'Google sign-in is not configured. Please contact the administrator.',
-        };
+        return { success: false, message: 'Google sign-in not configured.' };
       }
 
       const auth = getFirebaseAuth();
       const provider = new GoogleAuthProvider();
       const cred = await signInWithPopup(auth, provider);
       const fbUser = cred.user;
-
       const idToken = await fbUser.getIdToken();
-      
-      // Try to sync with backend, but create fallback if it fails
-      let backendUser: User | null = null;
-      try {
-        backendUser = await syncWithBackend(idToken, fbUser);
-      } catch (syncError) {
-        console.warn('Backend sync failed for Google login, creating fallback user:', syncError);
-      }
 
-      // If syncWithBackend returned null or threw, create a fallback user directly
-      if (!backendUser) {
-        backendUser = {
-          id: fbUser.uid,
-          email: fbUser.email || '',
-          name: fbUser.displayName || fbUser.email?.split('@')[0] || 'User',
-          role: 'student',
-          createdAt: fbUser.metadata.creationTime || new Date().toISOString(),
-        };
-        persistUser(backendUser);
-        persistToken(idToken);
-      }
+      await syncWithBackend(idToken, fbUser);
 
       return { success: true, message: 'Login successful!' };
     } catch (error: any) {
-      console.error('Google sign-in error:', error);
-      return { success: false, message: error.message || 'Failed to sign in with Google.' };
+      console.error('Google login error:', error);
+      return { success: false, message: error.message || 'Google sign-in failed.' };
     }
   };
 
-  const completeOAuthLogin = async (token: string): Promise<{ success: boolean; message: string }> => {
-    // No-op with pure Firebase client-side OAuth, kept for API compatibility
-    return { success: true, message: 'OAuth login completed.' };
-  };
-
+  // PASSWORD RESET
   const resetPassword = async (email: string): Promise<{ success: boolean; message: string }> => {
     try {
       if (!email) {
-        return { success: false, message: 'Please enter your email address.' };
+        return { success: false, message: 'Please enter your email.' };
       }
 
       if (!isFirebaseConfigured) {
-        return {
-          success: false,
-          message: 'Password reset is not configured. Please contact the administrator.',
-        };
+        return { success: false, message: 'Password reset not configured.' };
       }
 
       const auth = getFirebaseAuth();
       await sendPasswordResetEmail(auth, email.toLowerCase().trim());
-      return {
-        success: true,
-        message: 'Password reset email sent. Please check your inbox.',
-      };
+      return { success: true, message: 'Reset email sent. Check your inbox.' };
     } catch (error: any) {
-      console.error('Password reset error:', error);
-      return {
-        success: false,
-        message: error.message || 'Unable to send password reset email.',
-      };
+      console.error('Reset error:', error);
+      return { success: false, message: error.message || 'Reset failed.' };
     }
   };
 
+  // LOGOUT
   const logout = () => {
     if (isFirebaseConfigured) {
       const auth = getFirebaseAuth();
@@ -414,6 +359,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     persistToken(null);
   };
 
+  // OAUTH CALLBACK (no-op for Firebase client SDK)
+  const completeOAuthLogin = async (_token: string): Promise<{ success: boolean; message: string }> => {
+    return { success: true, message: 'OK' };
+  };
+
+  // UPDATE USER
   const updateUser = useCallback((updatedUser: User) => {
     persistUser(updatedUser);
   }, [persistUser]);
@@ -429,7 +380,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         loginWithGoogle,
         completeOAuthLogin,
         updateUser,
-        isAuthenticated: !!firebaseUser,
+        isAuthenticated: !!user,
         supportsOAuth,
         authReady,
         resetPassword,
